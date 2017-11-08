@@ -82,7 +82,6 @@ function generate_conductor_file() {
 
     pushd $GENERATED_SITE_LOCATION
     CONDUCTOR_FILE=conductor.yml
-    echo "redirects:" > ${CONDUCTOR_FILE}
     find -type f -iname 'index.html' | xargs dirname | sed -s "s/^\.//" | while read -r line ; do
         if [ ! -z "${line}" ]; then
             echo "  - from: ${line}" >> ${CONDUCTOR_FILE}

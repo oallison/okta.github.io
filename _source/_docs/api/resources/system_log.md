@@ -7,7 +7,13 @@ title: System Log (Beta)
 
 {% api_lifecycle beta %}
 
-The Okta System Log API provides read access to your organization's system log. This API provides more functionality than the [Events API](/docs/api/resources/events.html):
+The Okta System Log records system events related to your organization in order to provide an audit trail that can be used to understand platform activity and to diagnose problems.
+
+The Okta System Log API provides near-realtime read access to your organization's system log and is the programmatic counterpart of the [System Log UI](https://support.okta.com/help/Documentation/Knowledge_Article/About-the-System-Log-651903282). 
+
+Often the terms "event" and "log" are used interchangeably. In the context of this API, an "event" is an occurrence of interest within the system and "log" or "log object" is the recorded fact.  
+ 
+Notes:
 
 * The System Log API contains much more [structured data](/docs/api/resources/system_log.html#log-objects) than the [Events API](/docs/api/resources/events.html#event-model).
 * The System Log API supports additional [SCIM filters](/docs/api/resources/system_log.html#request-parameters) and the `q` query parameter, because of the presence of more structured data than the [Events API](/docs/api/resources/events.html#request-parameters).
@@ -22,129 +28,10 @@ The System Log API has one endpoint:
 
 See [Examples](#examples) for ways you can use the System Log API. For common use cases see [Useful System Log Queries](https://support.okta.com/help/Documentation/Knowledge_Article/Useful-System-Log-Queries).
 
-## Data Retention
 
-Log data older than 90 days is not returned, in accordance with Okta's [Data Retention Policy](https://support.okta.com/help/Documentation/Knowledge_Article/Okta-Data-Retention-Policy).
+## Log Object
 
-## Examples
-
-### Debugging
-The System Log API can be used to troubleshoot user problems. For example, you
-can use the following `curl` command to see events from user "Jane Doe":
-
-```sh
-curl -v -X GET \
--H "Accept: application/json" \
--H "Content-Type: application/json" \
--H "Authorization: SSWS ${api_token}" \
-"https://{yourOktaDomain}.com/api/v1/logs?q=Jane+Doe"
-```
-
-You can also use this API to search for particular types of events:
-
-```sh
-curl -v -X GET \
--H "Accept: application/json" \
--H "Content-Type: application/json" \
--H "Authorization: SSWS ${api_token}" \
-"https://{yourOktaDomain}.com/api/v1/logs?filter=event_type+eq+%22user.session.start%22"
-```
-
-### Transferring Data to a Separate System
-You can export your logs to a separate system for analysis or compliance. To obtain the entire dataset, query from the appropriate point of time in the past.
-
-```sh
-curl -v -X GET \
--H "Accept: application/json" \
--H "Content-Type: application/json" \
--H "Authorization: SSWS ${api_token}" \
-"https://{yourOktaDomain}.com/api/v1/logs?since=2017-10-01T00:00:00.000Z"
-```
-
-and retrieve the next page of events through the [`Link` response header](/docs/api/getting_started/design_principles.html#link-header) value with the `next` link relation. Continue this process until no events are returned.
-
-> Do not attempt to transfer data by manually paginating using `since` and `until` as this may lead to skipped or duplicated events. Instead, always follow the `next` links. 
-
-## Event Operations
-
-### List Events
-{:.api .api-operation}
-
-{% api_operation get /api/v1/logs %}
-
-Fetch a list of events from your Okta organization system log.
-
-#### Request Parameters
-{:.api .api-request .api-request-params}
-
-|------------ + ------------------------------------------------------------------------------------------------------+--------+--------------------|
-| Parameter   | Description                                                                                           | Format                                                   | Default                 |
-| ----------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ----------------------- |
-| `until`     | Upper time bound of events to return.                                                                 | [ISO8601 date/time](https://www.w3.org/TR/NOTE-datetime), must be temporally later than `since` | Current time            |
-| `since`     | Lower time bound of events to return.                                                                 | [ISO8601 date/time](https://www.w3.org/TR/NOTE-datetime), max 180 days ago         | 7 days prior to `until` |
-| `filter`    | [SCIM Filter expression](/docs/api/getting_started/design_principles.html#filtering) for events.      | [SCIM Filter expression](/docs/api/getting_started/design_principles.html#filtering) | |
-| `q`         | String search over all fields.                                                                        | String                                                   |                         |
-| `limit`     | Number of results to return per page.                                                                 | Integer between 0 and 100                                | 100                     |
-| `sortOrder` | Time order in which to return events.                                                                 | "ASCENDING" or "DESCENDING"                              | "ASCENDING"             |
-| `after`     | Opaque identifier used for [Pagination](/docs/api/getting_started/design_principles.html#pagination). |                                                          |                         |
-|-------------+-------------------------------------------------------------------------------------------------------+----------------------------------------------------------+-------------------------|
-
-##### Filter
-
-The following expressions are supported for events with the `filter` query parameter:
-
-Filter                                       | Description
--------------------------------------------- | ------------------------------------------------------------------------------
-`eventType eq ":eventType"`                  | Events that have a specific action [eventType](#attributes)
-`target.id eq ":id"`                         | Events published with a specific target id
-`actor.id eq ":id"`                          | Events published with a specific actor id
-
-
-See [Filtering](/docs/api/getting_started/design_principles.html#filtering) for more information about expressions.
-
-###### Filter Examples
-
-Events published for a target user
-
-    filter=target.id eq "00uxc78lMKUMVIHLTAXY"
-
-Failed login events
-
-    filter=eventType eq "user.session.start" and outcome.result eq "FAILURE"
-
-Events published for a target user and application
-
-    filter=target.id eq "00uxc78lMKUMVIHLTAXY" and target.id eq "0oabe82gnXOFVCDUMVAK"
-
-App SSO events for a target user and application
-
-    filter=eventType eq "app.auth.sso" and target.id eq "00uxc78lMKUMVIHLTAXY" and target.id eq "0oabe82gnXOFVCDUMVAK"
-
-Events published for a given ip address
-
-    filter=client.ipAddress eq "184.73.186.14"
-
-##### Query with q
-
-The query parameter `q` searches string fields.
-
-###### Query Examples
-
-* Events that mention a specific city: `q=San Francisco`
-
-* Events that mention a specific url: `q=interestingURI.com`
-
-* Events that mention a specific person: `q=firstName lastName`
-
-##### Response
-{:.api .api-response .api-response-params}
-
-The response contains a JSON array of [Log objects](#log-objects).
-
-
-## Log objects
-
-Each Log object describes a single action performed by a set of actors for a set of targets.
+Each Log object describes a single action or "event" performed by a set of actors for a set of targets.
 
 ### Example Log object
 ~~~json
@@ -340,11 +227,11 @@ Describes the user, app, client, or other entity (actor) who performed an action
 |-------------+-----------------------------------------------+-------------------+----------|
 | Property    | Description                                   | DataType          | Nullable |
 | ----------- | ----------------------------------------------| ----------------- | -------- |
-| id          | ID of actor                                | String            | FALSE    |
-| type        | Type of actor                              | String            | FALSE    |
-| alternateId | Alternative ID of actor                    | String            | TRUE     |
-| displayName | Display name of actor                      | String            | TRUE     |
-| detail      | Details about actor                           | Map[String->Object]| TRUE     |
+| id          | ID of actor                                   | String            | FALSE    |
+| type        | Type of actor                                 | String            | FALSE    |
+| alternateId | Alternative ID of actor                       | String            | TRUE     |
+| displayName | Display name of actor                         | String            | TRUE     |
+| detail      | Details about actor                           | Map[String->Object]| TRUE    |
 |-------------+-----------------------------------------------+-------------------+----------|
 
 ### Target Object
@@ -358,7 +245,7 @@ The entity upon which an actor performs an action. Targets may be anything: an a
 | type        | Type of a target                                             | String          | FALSE    |
 | alternateId | Alternative id of a target                                   | String          | TRUE     |
 | displayName | Display name of a target                                     | String          | TRUE     |
-| detail      | Details about target                                         | Map[String->Object] | TRUE  |
+| detail      | Details about target                                         | Map[String->Object] | TRUE |
 |-------------+--------------------------------------------------------------+-----------------+----------|
 
 ~~~ json
@@ -505,7 +392,7 @@ Describes an IP address used in a request.
 | source                                                                                                     | Details regarding the source           | String                                                      | TRUE     |
 | ------------+----------------------------------------------------------------+-----------------+---------- |
 
-## Event Model
+## Event Types
 
 ### Application Event
 
@@ -564,9 +451,108 @@ Describes an IP address used in a request.
 
 * `user.authentication.sso` doesn't capture whether the SSO attempt was successful or failed because Okta can't collect the subsequent authentication attempt status from the third-party service.
 
-## Response Headers
 
-### Self Link Response Header
+## Operations
+
+### List Events
+{:.api .api-operation}
+
+{% api_operation get /api/v1/logs %}
+
+Fetch a list of events from your Okta organization system log.
+
+#### Request Parameters
+{:.api .api-request .api-request-params}
+
+The table below summarizes the supported query parameters:
+
+|------------ + ------------------------------------------------------------------------------------------------------+----------------------------------------------------------+-------------------------|
+| Parameter   | Description                                                                                           | Format                                                   | Default                 |
+| ----------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ----------------------- |
+| `since`     | Filters the lower time bound of the log entries `publishedAt` property                                | An [ISO8601 internet date/time format](https://tools.ietf.org/html/rfc3339#page-8) with timezone. An example: `2017-05-03T16:22:187Z` | 7 days prior to `until` |
+| `until`     | Filters the upper time bound of the log entries `publishedAt` property                                | An [ISO8601 internet date/time format](https://tools.ietf.org/html/rfc3339#page-8) with timezone. An example: `2017-05-03T16:22:187Z` | Current time |
+| `after`     | Used to retrieve the next page of results. Okta returns a link in the HTTP Header (`rel=next`) that includes the after query parameter. | Opaque token |                         |
+| `filter`    | [Filter Expression](#expression-filter) that filters the results                                      | [SCIM Filter expression](/docs/api/getting_started/design_principles.html#filtering) | |
+| `q`         | Filters the log results by an exact [keyword](#keyword-filter)                                        | URL encoded string                                       |                         |
+| `sortOrder` | The order of the returned events sorted by `publishedAt`                                              | `ASCENDING` or `DESCENDING`                              | `ASCENDING`             |
+| `limit`     | Sets the number of results returned in the response                                                   | Integer between 0 and 100                                | 100                     |
+|-------------+-------------------------------------------------------------------------------------------------------+----------------------------------------------------------+-------------------------|
+
+##### Filtering Results
+
+###### Expression Filter
+
+
+An expression filter is useful for performing structured queries where constraints on fields can be explicitly targeted.  
+
+The following expressions are supported for events with the `filter` query parameter:
+
+Filter                                       | Description
+-------------------------------------------- | ------------------------------------------------------------------------------
+`eventType eq ":eventType"`                  | Events that have a specific action [eventType](#attributes)
+`target.id eq ":id"`                         | Events published with a specific target id
+`actor.id eq ":id"`                          | Events published with a specific actor id
+
+
+See [Filtering](/docs/api/getting_started/design_principles.html#filtering) for more information about expressions.
+
+The following are some examples of common filter expressions.
+
+Events published for a target user:
+```javascript
+filter=target.id eq "00uxc78lMKUMVIHLTAXY"
+```
+
+Failed login events:
+```javascript
+filter=eventType eq "user.session.start" and outcome.result eq "FAILURE"
+```
+
+Events published for a target user and application:
+```javascript
+filter=target.id eq "00uxc78lMKUMVIHLTAXY" and target.id eq "0oabe82gnXOFVCDUMVAK"
+```
+
+App SSO events for a target user and application:
+```javascript
+filter=eventType eq "app.auth.sso" and target.id eq "00uxc78lMKUMVIHLTAXY" and target.id eq "0oabe82gnXOFVCDUMVAK"
+```
+
+Events published for a given ip address:
+```javascript
+filter=client.ipAddress eq "184.73.186.14"
+```
+
+###### Keyword Filter
+
+The query parameter `q` can be used to perform keyword matching against a Log object's field values. In order to satisfy the constraint, all supplied keywords must be matched exactly. 
+Note that matching is case-insensitive. 
+
+The following are some examples of common keyword filtering:
+
+* Events that mention a specific city: `q=San Francisco`
+* Events that mention a specific url: `q=interestingURI.com`
+* Events that mention a specific person: `q=firstName lastName`
+
+###### Datetime Filter
+
+Log objects can be filtered by `publishedAt` value with the following combination of parameters:
+
+* `since`
+* `until`
+* `since` and `until`
+* `after`
+
+Note that `since` and `after` are mutually exclusive and cannot be specified simultaneously. 
+
+The `after` parameter is system generated for use in ["next" links](#next-link-response-header). Users should not attemp to craft requests using this value and rely on the system generated links instead.  
+
+##### Response
+{:.api .api-response .api-response-params}
+
+The response contains a JSON array of [Log objects](#log-objects).
+
+###### Self Link Response Header
 The response always includes a `self` `Link` header, which is a link to the current query that was executed.
 
 This header is of the form:
@@ -579,7 +565,7 @@ For example:
 Link: <https://{yourOktaDomain}.com/api/v1/logs?q=&sortOrder=DESCENDING&limit=20&until=2017-09-17T23%3A59%3A59%2B00%3A00&since=2017-06-10T00%3A00%3A00%2B00%3A00>; rel="self"
 ```
 
-### Next Link Response Header
+###### Next Link Response Header
 The response may include a `next` `Link` header, which is a link to the next page of results, if there is one. Note that while the `self` `Link` will always exist, the `next` `Link` may not exist.
 
 This header is of the form:
@@ -592,10 +578,10 @@ For example:
 Link: <https://{yourOktaDomain}.com/api/v1/logs?q=&sortOrder=DESCENDING&limit=20&until=2017-09-17T15%3A41%3A12.994Z&after=349996bd-5091-45dc-a39f-d357867a30d7&since=2017-06-10T00%3A00%3A00%2B00%3A00>; rel="next"
 ```
 
-## Timeouts
+#### Timeouts
 Individual queries have a timeout of 30 seconds.
 
-## Errors
+### Errors
 ~~~json
 {
   "errorCode": "E0000001",
@@ -673,6 +659,48 @@ Exceeding the rate limit results in:
 ~~~
 
 
-## Rate Limits
+### Rate Limits
 Callers are limited to 60 queries max per minute.
 
+## Data Retention
+
+Log data older than 90 days is not returned, in accordance with Okta's [Data Retention Policy](https://support.okta.com/help/Documentation/Knowledge_Article/Okta-Data-Retention-Policy). Queries that exceed the retention period will succeed but only results that have a `publishedAt` timestamp within the window will be returned.
+
+## Examples
+
+### Debugging
+The System Log API can be used to troubleshoot user problems. For example, you
+can use the following `curl` command to see events from user "Jane Doe":
+
+```sh
+curl -v -X GET \
+-H "Accept: application/json" \
+-H "Content-Type: application/json" \
+-H "Authorization: SSWS ${api_token}" \
+"https://{yourOktaDomain}.com/api/v1/logs?q=Jane+Doe"
+```
+
+You can also use this API to search for particular types of events:
+
+```sh
+curl -v -X GET \
+-H "Accept: application/json" \
+-H "Content-Type: application/json" \
+-H "Authorization: SSWS ${api_token}" \
+"https://{yourOktaDomain}.com/api/v1/logs?filter=event_type+eq+%22user.session.start%22"
+```
+
+### Transferring Data to a Separate System
+You can export your logs to a separate system for analysis or compliance. To obtain the entire dataset, query from the appropriate point of time in the past.
+
+```sh
+curl -v -X GET \
+-H "Accept: application/json" \
+-H "Content-Type: application/json" \
+-H "Authorization: SSWS ${api_token}" \
+"https://{yourOktaDomain}.com/api/v1/logs?since=2017-10-01T00:00:00.000Z"
+```
+
+and retrieve the next page of events through the [`Link` response header](/docs/api/getting_started/design_principles.html#link-header) value with the `next` link relation. Continue this process until no events are returned.
+
+> Do not attempt to transfer data by manually paginating using `since` and `until` as this may lead to skipped or duplicated events. Instead, always follow the `next` links. 
